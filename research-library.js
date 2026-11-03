@@ -70,5 +70,5 @@
   },true);
   document.addEventListener('keydown',e=>{const host=document.getElementById('researchWorkOverlay');if(!host)return;if(e.key==='Escape'){e.preventDefault();closeDialog();return;}if(e.key==='Tab'){const a=[...host.querySelectorAll('button:not(:disabled),a[href],input,select,textarea,[tabindex="0"]')].filter(x=>x.getClientRects().length),first=a[0],last=a.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}},true);
   window.addEventListener('hashchange',closeDialog);
-  window.HouwaiResearchLibrary={html,get line(){return current()?.line||'discipline';},get state(){return current();},invalidate,close:closeDialog};
+  window.HouwaiResearchLibrary={html,get line(){return current()?.line||'discipline';},get state(){return current();},selectSpecial(scope={},track='ai'){const v=view(scope);v.line='special';v.track_id=['ai','arts','moral'].includes(track)?track:'ai';},invalidate,close:closeDialog};
 })();
