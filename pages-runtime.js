@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261104-committee-materials-v11';
+const PUBLIC_DEMO_VERSION = '20261104-originals-pdfs-v12';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
