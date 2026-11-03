@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261103-teachers-1000-v10';
+const PUBLIC_DEMO_VERSION = '20261104-committee-materials-v11';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
@@ -6,6 +6,7 @@ if (!location.hash || location.hash === '#') history.replaceState(null, '', '#gr
 const publicVersion = typeof PUBLIC_DEMO_VERSION === 'undefined' ? '20261102-evidence-v2' : PUBLIC_DEMO_VERSION;
 const publicData = fetch('data/index.json?v='+encodeURIComponent(publicVersion)).then(r => {if (!r.ok) throw new Error('演示资料暂未读取，请刷新重试。'); return r.json();});
 const publicProfiles = new Map();
+const publicCommitteeSource=fetch('data/committee-materials.json?v='+encodeURIComponent(publicVersion)).then(r=>{if(!r.ok)throw new Error('专项资料摘要暂未读取。');return r.json();});
 const publicCopy = value => JSON.parse(JSON.stringify(value));
 async function publicPerson(id) {
   if (!/^(teacher-\d{3}|staff-\d{4})$/.test(id)) throw new Error('未找到该人员。');
@@ -26,6 +27,7 @@ function publicRows(data, q) {
 request = async function(path, options={}) {
   if ((options.method||'GET').toUpperCase()!=='GET') throw new Error('公开演示仅供浏览，新增与修改请使用本地完整版。');
   const data=await publicData, url=new URL(path,'https://public.invalid'), route=url.pathname,q=url.searchParams;
+  if(route==='/committee-materials/catalog')return publicCopy(window.HouwaiCommitteeMaterialsModel.catalog(await publicCommitteeSource,Object.fromEntries(q)));
   if (route==='/management-diagnostics') {
     if(!window.HouwaiDiagnostics||!data.management_diagnostics_source)throw new Error('学科进展与培养重点暂未读取。');
     return publicCopy(window.HouwaiDiagnostics.analyze(data.management_diagnostics_source,Object.fromEntries(q)));
@@ -119,7 +121,7 @@ layout=function(content) {
   const control=box.querySelector('.actor-control');
   if(control)control.innerHTML='<span class="tag blue">集团视角 · 公开演示</span>';
   const notice=box.querySelector('.demo-notice span:not(.demo-dot)');
-  if(notice)notice.textContent='公开只读演示 · 教师档案与评价为演示数据 · 真实系统未接入';
+  if(notice)notice.textContent='公开只读展示 · 教师档案与评价为演示数据 · 教研资料按页面来源说明';
   const brand=box.querySelector('.brand');if(brand)brand.setAttribute('href','#group');
   const month=box.querySelector('#appraisalMonth');if(month){month.min='2026-10';month.max='2026-10';month.title='本演示收录2026年10月';}
   return box.innerHTML;
