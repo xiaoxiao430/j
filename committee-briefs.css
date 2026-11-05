@@ -17,3 +17,6 @@
 
 /* Editorial feed covers keep their full composition visible. */
 .cb-cover{height:auto!important;aspect-ratio:16/9}.cb-cover>img{height:100%;object-fit:cover}.cb-cover-label{position:absolute;left:12px;bottom:12px;z-index:2;background:#fffffff0;border-radius:4px;padding:4px 8px;font-size:12px;line-height:1.6;color:#31556e;pointer-events:none}.cb-share-photo>img{object-fit:contain;background:#f4f8fa}
+
+/* Phones show complete visual material at reading size; no tiny thumbnail strips. */
+@media(max-width:767px){.cb-output-media,.cb-cover{min-height:220px;aspect-ratio:16/10}.cb-cover>img{object-fit:contain;background:#f4f8fa}.cb-gallery-frame>img{max-height:none;width:100%;min-height:220px;touch-action:pan-y pinch-zoom}.cb-gallery-frame{overflow:auto}.cb-finding>p,.cb-stats small{display:block}.cb-output-blurb,.cb-observation,.cb-decision p{font-size:15px;line-height:1.95}.cb-dialog-body{touch-action:pan-y pinch-zoom}}

@@ -86,7 +86,7 @@
   orgDashboard=function(){
     const content=native.dashboard.apply(this,arguments);
     if(!['group','principal'].includes(state.data?.actor?.role)||!window.HouwaiCommitteeMaterials?.overviewHTML)return content;
-    const summary=window.HouwaiCommitteeMaterials.overviewHTML(scope()),box=document.createElement('div');box.innerHTML=content;
+    const summary=window.HouwaiCommitteeProjects?window.HouwaiCommitteeProjects.overviewHTML(scope()):window.HouwaiCommitteeMaterials.overviewHTML(scope()),box=document.createElement('div');box.innerHTML=content;
     const judgment=box.querySelector('.flow-judgment');
     if(judgment){judgment.insertAdjacentHTML('afterend',summary);return box.innerHTML;}
     return summary+content;
@@ -108,6 +108,7 @@
       return true;
     }
   };
+  window.HouwaiPlatformNavigation.openResearchProjects=(selectedScope={})=>{const target={campus:selectedScope.campus||'',department:selectedScope.department||''};pref(target).tab='projects';navigate('research',target.campus,target.department);};
   window.HouwaiPlatformNavigation.openCommitteeArchive=(selectedScope,track)=>window.HouwaiPlatformNavigation.openCommittee(selectedScope,track,'library');
   window.HouwaiPlatformNavigation.returnFromBrief=()=>{location.hash=briefReturnHash;};
   function safeURL(value){try{const u=new URL(value,location.href);return ['https:','http:'].includes(u.protocol)?u.href:'#';}catch{return '#';}}

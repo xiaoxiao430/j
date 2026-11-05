@@ -31,6 +31,7 @@
     try{if(typeof value!=='string'||value!==value.trim()||/[\s\\\p{C}]/u.test(value))return '';const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&['jmryqyx.cn','xiaoxiao430.github.io'].includes(u.hostname)?u.href:'';}catch{return '';}
   }
   const reviewedMedia=o=>arr(o?.media).filter(m=>['image','video'].includes(m?.type)&&asset(m.url,m.type));
+  const externalOutputs=new Map();
   let active={track:'',scope:{},data:null},modal=null,focusBefore=null,savedOverflow='';
   function result(){
     const who=actor();
@@ -61,13 +62,14 @@
     const outputs=arr(b.outputs).slice(0,2),share=asset(b.share_image_url,'image');
     return `<section class="cb-page cb-tone-${track}" id="committeeResultsBrief" data-cb-track="${track}" data-cb-as-of="${safe(b.as_of)}">${switches(track)}<header class="cb-page-header"><div class="cb-page-identity"><span class="cb-hero-symbol">${icon(track)}</span><div><span class="cb-kicker">厚外大教研 · ${safe(b.period_label||'阶段成果')}</span><h1>${safe(t.label)}<small>成果简报</small></h1><p>${safe(t.leader)}<span>牵头</span><i aria-hidden="true">·</i>材料截至 ${day(b.as_of||r.data.as_of)}</p></div></div><div class="cb-header-actions">${share?`<a class="cb-share-link" href="${safe(share)}" download="${safe(names[track])}成果简报.png" data-cb-share>${icon('share')}保存一页图</a>`:'<span class="cb-share-pending">分享图正在整理</span>'}<button type="button" class="cb-back" data-cb-back>${icon('back')}返回</button></div></header><section class="cb-finding"><span>先看结论</span><h2>${safe(b.headline||b.summary)}</h2>${b.summary&&b.summary!==b.headline?`<p>${safe(b.summary)}</p>`:''}</section>${stats(b)}<div class="cb-section-title"><h2>已经做出的代表成果</h2><span>点开图片、视频或短报告</span></div><div class="cb-outputs">${outputs.map(outputCard).join('')||'<p class="cb-empty">目前还没有整理出适合公开展示的代表成果。</p>'}</div>${b.decision?.title||b.decision?.text?`<aside class="cb-decision">${icon('target')}<div><span>下一步先抓</span>${b.decision.title?`<strong>${safe(b.decision.title)}</strong>`:''}${b.decision.text?`<p>${safe(b.decision.text)}</p>`:''}</div></aside>`:''}<footer class="cb-archive"><div>${icon('folder')}<span><b>需要深入看，再打开资料留存</b><small>原报告、历次记录和完整汇编保留在这里</small></span></div><button type="button" data-cb-archive>资料留存 ${icon('arrow')}</button></footer>${scope.campus||scope.department?'<p class="cb-scope-note">本页为集团共享简报，各项成果保留实际校区归属。</p>':''}</section>`;
   }
-  function output(id){return arr(active.data?.results_brief?.outputs).find(x=>x.id===id);}
+  function output(id){return arr(active.data?.results_brief?.outputs).find(x=>x.id===id)||externalOutputs.get(id)?.item;}
   function show(id,kind,index=0){
     const item=output(id);if(!item)return;
     const media=reviewedMedia(item),images=media.filter(m=>m.type==='image'),videos=media.filter(m=>m.type==='video');
     if(kind==='gallery'&&!images.length||kind==='video'&&!videos.length||kind==='report'&&!arr(item.report?.sections).length)return;
     if(!modal){focusBefore=document.activeElement;savedOverflow=document.body.style.overflow;document.body.style.overflow='hidden';}
-    modal={actor:actor(),track:active.track,scope:{...active.scope},item,kind,index:Math.max(0,Math.min(index,(kind==='video'?videos:images).length-1))};renderModal();
+    const external=externalOutputs.get(id);
+    modal={actor:actor(),track:external?.track||active.track,scope:{...(external?.scope||active.scope)},item,kind,index:Math.max(0,Math.min(index,(kind==='video'?videos:images).length-1))};renderModal();
   }
   function modalMedia(m,kind){
     if(kind==='video')return `<div class="cb-video-frame"><video controls playsinline preload="metadata" ${asset(m.poster_url,'image')?`poster="${safe(asset(m.poster_url,'image'))}"`:''} src="${safe(asset(m.url,'video'))}" data-cb-player aria-label="${safe(m.caption||modal.item.title)}"></video><p class="cb-media-failure" hidden data-cb-media-failure>这段视频暂时无法播放，可以先阅读这项成果的短报告。</p></div>${m.caption?`<p class="cb-media-caption">${safe(m.caption)}</p>`:''}`;
@@ -106,11 +108,14 @@
     if(e.target.matches?.('[data-cb-player]')){const f=e.target.parentElement.querySelector('[data-cb-media-failure]');if(f)f.hidden=false;}
     if(e.target.matches?.('img[data-cb-image]')){e.target.hidden=true;const f=e.target.parentElement.querySelector('[data-cb-media-failure]');if(f)f.hidden=false;else{const note=document.createElement('span');note.className='cb-cover-unavailable';note.textContent='图片暂时无法显示，仍可阅读短报告';e.target.parentElement.append(note);}}
   },true);
+  let touchOrigin=null;
+  document.addEventListener('touchstart',e=>{if(modal?.kind==='gallery'&&e.touches.length===1&&e.target.closest?.('.cb-gallery-frame'))touchOrigin={x:e.touches[0].clientX,y:e.touches[0].clientY};else touchOrigin=null;},{passive:true});
+  document.addEventListener('touchend',e=>{if(!touchOrigin||modal?.kind!=='gallery'||e.changedTouches.length!==1)return;const dx=e.changedTouches[0].clientX-touchOrigin.x,dy=e.changedTouches[0].clientY-touchOrigin.y;touchOrigin=null;if(Math.abs(dx)>65&&Math.abs(dx)>Math.abs(dy)*1.5)show(modal.item.id,'gallery',modal.index+(dx<0?1:-1));},{passive:true});
   window.addEventListener('hashchange',close);
   function shareHTML(t,qrDataURL=''){
     if(!t||!tracks.includes(t.id)||!t.results_brief)return '';
     const b=t.results_brief,items=arr(b.outputs).slice(0,2),decision=typeof b.share_decision==='string'?{title:b.share_decision,text:''}:b.share_decision||b.decision||{},qr=typeof qrDataURL==='string'&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(qrDataURL)&&qrDataURL.length<100000?qrDataURL:'',cut=(x,n)=>{const text=String(x||'');return text.length<=n?text:text.slice(0,n-1)+'…';};
     return `<article class="cb-share-sheet cb-tone-${t.id}" data-cb-share-sheet="${t.id}"><header><span class="cb-share-brand">厚</span><div><b>厚外大教研与人才发展</b><span>${safe(b.period_label||'阶段成果')} · 材料截至 ${day(b.as_of)}</span></div><span class="cb-share-category">${icon(t.id)}</span></header><div class="cb-share-heading"><span>${safe(t.leader)}牵头</span><h1>${safe(t.label)}<small>成果简报</small></h1><h2>${safe(b.headline||b.summary)}</h2></div><div class="cb-share-stats">${arr(b.highlights).slice(0,2).map(x=>`<div><b>${safe(x.value)}<small>${safe(x.unit)}</small></b><span>${safe(cut(x.label,10))}</span></div>`).join('')}</div><div class="cb-share-outputs">${items.map((o,i)=>{const media=reviewedMedia(o),cover=asset(o.cover_url,'image')||media.find(m=>m.type==='image')?.url;return `<section><div class="cb-share-photo">${cover?`<img src="${safe(cover)}" alt="${safe(o.title)}">`:`<div>${icon('report')}</div>`}<span>${safe(o.cover_label||o.stage)}</span></div><div class="cb-share-output-text"><span class="cb-share-index">0${i+1} <i>${safe([o.campus,o.department].filter(Boolean).join(' · ')||'集团共享')}</i></span><h3>${safe(o.title)}</h3><p>${safe(o.share_blurb||o.blurb)}</p></div></section>`;}).join('')}</div><aside class="cb-share-decision">${icon('target')}<div><span>下一步先抓</span><h3>${safe(decision.title||'')}</h3>${decision.text?`<p>${safe(decision.text)}</p>`:''}</div></aside><footer><div><strong>扫码看图、视频与短报告</strong><span>打开这条线的完整简报</span></div>${qr?`<img src="${qr}" alt="打开完整成果简报">`:`<span class="cb-share-qr-label">打开网页<br>看完整简报</span>`}</footer></article>`;
   }
-  window.HouwaiCommitteeBriefs={html,shareHTML,close,get current(){return active;},get modal(){return modal;}};
+  window.HouwaiCommitteeBriefs={html,shareHTML,close,outputCard,registerOutputs(outputs,track,scope={}){for(const item of arr(outputs))if(item?.id)externalOutputs.set(item.id,{item,track,scope:{...scope}});},get current(){return active;},get modal(){return modal;}};
 })();

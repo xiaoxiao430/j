@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261105-results-briefs-v14';
+const PUBLIC_DEMO_VERSION = '20261105-project-research-v15';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
@@ -28,6 +28,7 @@ request = async function(path, options={}) {
   if ((options.method||'GET').toUpperCase()!=='GET') throw new Error('公开演示仅供浏览，新增与修改请使用本地完整版。');
   const data=await publicData, url=new URL(path,'https://public.invalid'), route=url.pathname,q=url.searchParams;
   if(route==='/committee-materials/catalog')return publicCopy(window.HouwaiCommitteeMaterialsModel.catalog(await publicCommitteeSource,Object.fromEntries(q)));
+  if(route==='/committee-projects/catalog'||route==='/committee-materials/projects')return publicCopy(window.HouwaiCommitteeMaterialsModel.projects(await publicCommitteeSource,Object.fromEntries(q)));
   if (route==='/management-diagnostics') {
     if(!window.HouwaiDiagnostics||!data.management_diagnostics_source)throw new Error('学科进展与培养重点暂未读取。');
     return publicCopy(window.HouwaiDiagnostics.analyze(data.management_diagnostics_source,Object.fromEntries(q)));
