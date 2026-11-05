@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261104-integrated-research-v13';
+const PUBLIC_DEMO_VERSION = '20261105-results-briefs-v14';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
