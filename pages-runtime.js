@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261105-project-research-v15';
+const PUBLIC_DEMO_VERSION = '20261105-project-research-v15-final';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
@@ -6,7 +6,7 @@ if (!location.hash || location.hash === '#') history.replaceState(null, '', '#gr
 const publicVersion = typeof PUBLIC_DEMO_VERSION === 'undefined' ? '20261102-evidence-v2' : PUBLIC_DEMO_VERSION;
 const publicData = fetch('data/index.json?v='+encodeURIComponent(publicVersion)).then(r => {if (!r.ok) throw new Error('演示资料暂未读取，请刷新重试。'); return r.json();});
 const publicProfiles = new Map();
-const publicCommitteeSource=fetch('data/committee-materials.json?v='+encodeURIComponent(publicVersion)).then(r=>{if(!r.ok)throw new Error('专项资料摘要暂未读取。');return r.json();});
+const publicCommitteeSource=fetch('data/committee-materials.json?v='+encodeURIComponent(publicVersion),{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('专项资料摘要暂未读取。');return r.json();});
 const publicCopy = value => JSON.parse(JSON.stringify(value));
 async function publicPerson(id) {
   if (!/^(teacher-\d{3}|staff-\d{4})$/.test(id)) throw new Error('未找到该人员。');
