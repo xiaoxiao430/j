@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261105-project-research-v15-final';
+const PUBLIC_DEMO_VERSION = '20261105-project-research-v15-final2';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
