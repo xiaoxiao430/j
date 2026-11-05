@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261105-editorial-v17-final';
+const PUBLIC_DEMO_VERSION = '20261106-core-subjects-v18-final';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
