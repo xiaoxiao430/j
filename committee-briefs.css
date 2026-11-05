@@ -20,3 +20,7 @@
 
 /* Phones show complete visual material at reading size; no tiny thumbnail strips. */
 @media(max-width:767px){.cb-output-media,.cb-cover{min-height:220px;aspect-ratio:16/10}.cb-cover>img{object-fit:contain;background:#f4f8fa}.cb-gallery-frame>img{max-height:none;width:100%;min-height:220px;touch-action:pan-y pinch-zoom}.cb-gallery-frame{overflow:auto}.cb-finding>p,.cb-stats small{display:block}.cb-output-blurb,.cb-observation,.cb-decision p{font-size:15px;line-height:1.95}.cb-dialog-body{touch-action:pan-y pinch-zoom}}
+
+/* Theme covers are distinct from the unmodified original photos and videos. */
+.cb-output-media{height:auto;aspect-ratio:16/9}.cb-cover.is-editorial>img{object-fit:cover}.cb-cover-label.is-editorial{font-size:11px;font-weight:700;color:#3e5968;border:1px solid #ffffffc2;background:#ffffffed;box-shadow:0 2px 8px #14344c0d}.cb-share-photo:has(>img[alt*="AI主题配图"])>img{object-fit:cover}
+@media(max-width:767px){.cb-output-media{aspect-ratio:16/10;min-height:220px}.cb-cover.is-editorial>img{object-fit:cover}.cb-cover-label.is-editorial{font-size:11px}.cb-output-actions>button{white-space:normal}}
