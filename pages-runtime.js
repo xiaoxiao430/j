@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261106-core-subjects-v18-final';
+const PUBLIC_DEMO_VERSION = '20261113-student-learning-v19-final';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
@@ -8,6 +8,17 @@ const publicData = fetch('data/index.json?v='+encodeURIComponent(publicVersion))
 const publicProfiles = new Map();
 const publicCommitteeSource=fetch('data/committee-materials.json?v='+encodeURIComponent(publicVersion),{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('专项资料摘要暂未读取。');return r.json();});
 const publicCopy = value => JSON.parse(JSON.stringify(value));
+let publicStudentLearningPromise=null;
+function publicStudentLearning(){
+  if(!publicStudentLearningPromise)publicStudentLearningPromise=fetch('data/student-learning-demo.json?v='+encodeURIComponent(publicVersion)).then(r=>{
+    if(!r.ok)throw new Error('学生学情样板暂未读取，请刷新重试。');
+    return r.json();
+  }).then(config=>{
+    if(!window.HouwaiStudentLearningModel)throw new Error('学生学情模块暂未准备好。');
+    return window.HouwaiStudentLearningModel.create(config);
+  }).catch(error=>{publicStudentLearningPromise=null;throw error;});
+  return publicStudentLearningPromise;
+}
 async function publicPerson(id) {
   if (!/^(teacher-\d{3}|staff-\d{4})$/.test(id)) throw new Error('未找到该人员。');
   if (!publicProfiles.has(id)) publicProfiles.set(id, fetch(`data/people/${id}.json?v=${encodeURIComponent(publicVersion)}`).then(r => {if (!r.ok) throw new Error('未找到该档案。'); return r.json();}));
@@ -27,6 +38,10 @@ function publicRows(data, q) {
 request = async function(path, options={}) {
   if ((options.method||'GET').toUpperCase()!=='GET') throw new Error('公开演示仅供浏览，新增与修改请使用本地完整版。');
   const data=await publicData, url=new URL(path,'https://public.invalid'), route=url.pathname,q=url.searchParams;
+  if(route.startsWith('/student-learning/')||route.startsWith('/students/')){
+    const engine=await publicStudentLearning();
+    return publicCopy(engine.resolve(route,Object.fromEntries(q)));
+  }
   if(route==='/committee-materials/catalog')return publicCopy(window.HouwaiCommitteeMaterialsModel.catalog(await publicCommitteeSource,Object.fromEntries(q)));
   if(route==='/committee-projects/catalog'||route==='/committee-materials/projects')return publicCopy(window.HouwaiCommitteeMaterialsModel.projects(await publicCommitteeSource,Object.fromEntries(q)));
   if (route==='/management-diagnostics') {
