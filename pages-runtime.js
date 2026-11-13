@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261113-student-answercard-v19';
+const PUBLIC_DEMO_VERSION = '20261113-classroom-review-v20';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
@@ -38,6 +38,18 @@ function publicRows(data, q) {
 request = async function(path, options={}) {
   if ((options.method||'GET').toUpperCase()!=='GET') throw new Error('公开演示仅供浏览，新增与修改请使用本地完整版。');
   const data=await publicData, url=new URL(path,'https://public.invalid'), route=url.pathname,q=url.searchParams;
+  if(route.startsWith('/classroom-review/')){
+    const parts=route.split('/'),kind=parts[2],id=decodeURIComponent(parts[3]||'');
+    if(parts.length!==4||!['teachers','lessons','students'].includes(kind))throw new Error('课堂学生入口不存在。');
+    const teacherId=kind==='teachers'?id:q.get('teacher_id');
+    if(!teacherId)throw new Error('请从对应教师的课堂进入。');
+    const profile=await publicPerson(teacherId);
+    if(!profile.person?.teaching)throw new Error('当前人员没有任教课堂。');
+    const config=await publicStudentLearning();
+    if(!window.HouwaiLegacyLearningModel)throw new Error('课堂学生模块暂未准备好。');
+    const model=window.HouwaiLegacyLearningModel.create({person:profile.person,lessons:profile.workspace.lessons,name_pool:config.catalog().students.map(s=>s.name)});
+    return publicCopy(kind==='teachers'?model.catalog():kind==='lessons'?model.lesson(id,q.get('stage')||'first'):model.student(id));
+  }
   if(route.startsWith('/student-learning/')||route.startsWith('/students/')){
     const engine=await publicStudentLearning();
     return publicCopy(engine.resolve(route,Object.fromEntries(q)));
