@@ -1,4 +1,4 @@
-const PUBLIC_DEMO_VERSION = '20261113-student-learning-v19-final';
+const PUBLIC_DEMO_VERSION = '20261113-student-answercard-v19';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
