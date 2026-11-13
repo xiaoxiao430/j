@@ -89,7 +89,7 @@
     host.innerHTML = body();host.scrollTop = 0;
   }
   async function open(el) {
-    if (!data) {try {data = await publicData;} catch {return;}}
+    try {data=await(window.publicDataSections?publicDataSections(['people','management']):publicData);}catch{return;}
     const base = window.HouwaiOrgFlow?.currentScope() || {campus:org.campus,department:org.department};
     view = {base:{...base},campus:base.campus || '',department:base.department || '',basis:org.basis,saved:new Map()};
     if (el.hasAttribute('data-ins-category')) {

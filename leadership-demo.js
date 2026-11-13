@@ -1,7 +1,8 @@
 'use strict';
 /* Public demonstration only. Load after pages-runtime.js and organization.js. */
 (() => {
-  let records = null;
+  let records = null,sourcePending=false;
+  function ensureRecords(){if(records||sourcePending)return;sourcePending=true;(window.publicDataSections?publicDataSections(['management']):publicData).then(data=>{records=Array.isArray(data.management)?unique(data.management):[];if(state.data)render();}).catch(()=>{}).finally(()=>{sourcePending=false;});}
   const scenarios = [
     ['stable','表现稳定','保持有效做法','复评时核对持续性，沉淀可分享的课堂实践。'],
     ['improving','支持后改善','确认支持成效','比较首次与复测，复评时再看新课是否稳定。'],
@@ -19,6 +20,7 @@
   const unique = rows => [...new Map(rows.map(x => [x.id,x])).values()];
   const metric = (label,value,note) => `<div class="demo-metric"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`;
   function dashboard() {
+    ensureRecords();
     if (!records || !org.summary || state.data.actor.role === 'mentor') return '';
     const rows = unique(scopeRows()), sum = key => rows.reduce((a,x) => a + number(x.mastery?.[key]),0);
     const expected = sum('expected'), determined = sum('determined'), achieved = sum('achieved');
@@ -83,5 +85,5 @@
     else if (el.hasAttribute('data-demo-lesson')) showLesson(el.dataset.demoLesson);
   });
   document.addEventListener('submit',e => {if (e.target.id !== 'demoScenarioSearch') return;e.preventDefault();listState.q = document.querySelector('#demoScenarioQuery').value.trim();listState.page = 1;updateList();});
-  publicData.then(data => {records = Array.isArray(data.management) ? unique(data.management) : null;if (state.data) render();}).catch(() => {});
+
 })();

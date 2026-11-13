@@ -1,13 +1,19 @@
-const PUBLIC_DEMO_VERSION = '20261113-classroom-review-v20';
+const PUBLIC_DEMO_VERSION = '20261114-performance-v22';
 'use strict';
 /* Public Pages adapter: read-only, fresh synthetic snapshots, no live backend. */
 state.actor = 'group-all';
 if (!location.hash || location.hash === '#') history.replaceState(null, '', '#group');
 const publicVersion = typeof PUBLIC_DEMO_VERSION === 'undefined' ? '20261102-evidence-v2' : PUBLIC_DEMO_VERSION;
-const publicData = fetch('data/index.json?v='+encodeURIComponent(publicVersion)).then(r => {if (!r.ok) throw new Error('演示资料暂未读取，请刷新重试。'); return r.json();});
-const publicProfiles = new Map();
-const publicCommitteeSource=fetch('data/committee-materials.json?v='+encodeURIComponent(publicVersion),{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('专项资料摘要暂未读取。');return r.json();});
-const publicCopy = value => JSON.parse(JSON.stringify(value));
+const publicJSONCache=new Map(),publicSectionPending=new Map(),publicResponseCache=new Map(),publicLegacyModels=new Map();
+const publicPerf={jsonFetches:0,jsonCacheHits:0,requestCacheHits:0,legacyModelsBuilt:0};
+function publicJSON(url){if(publicJSONCache.has(url)){publicPerf.jsonCacheHits++;return publicJSONCache.get(url);}publicPerf.jsonFetches++;const promise=fetch(url).then(r=>{if(!r.ok){const e=new Error('资料暂未读取，请重试。');e.status=r.status;throw e;}return r.json();}).catch(e=>{publicJSONCache.delete(url);throw e;});publicJSONCache.set(url,promise);if(publicJSONCache.size>48)publicJSONCache.delete(publicJSONCache.keys().next().value);return promise;}
+const publicData=publicJSON('data/runtime/core.json?v='+encodeURIComponent(publicVersion)).catch(e=>{if(e.status===404)return publicJSON('data/index.json?v='+encodeURIComponent(publicVersion));throw e;});
+async function publicDataSections(keys){const d=await publicData;await Promise.all(keys.map(async key=>{if(d[key]!==undefined)return;if(key==='platform_light'&&d.platform_source){d[key]=d.platform_source;return;}if(!publicSectionPending.has(key)){const url=d.__slices?.sections?.[key];if(!url)throw Error('该部分资料尚未收录。');publicSectionPending.set(key,publicJSON(url).then(v=>{d[key]=v;}).finally(()=>publicSectionPending.delete(key)));}await publicSectionPending.get(key);}));return d;}
+const publicProfiles=new Map();
+let publicCommitteePromise=null;
+function publicCommitteeSource(){if(!publicCommitteePromise)publicCommitteePromise=publicJSON('data/committee-materials.json?v='+encodeURIComponent(publicVersion)).catch(e=>{publicCommitteePromise=null;throw e;});return publicCommitteePromise;}
+const publicCopy=value=>JSON.parse(JSON.stringify(value));
+window.HouwaiPerformance={stats:publicPerf,clear(){publicResponseCache.clear();publicProfiles.clear();publicLegacyModels.clear();}};
 let publicStudentLearningPromise=null;
 function publicStudentLearning(){
   if(!publicStudentLearningPromise)publicStudentLearningPromise=fetch('data/student-learning-demo.json?v='+encodeURIComponent(publicVersion)).then(r=>{
@@ -19,11 +25,12 @@ function publicStudentLearning(){
   }).catch(error=>{publicStudentLearningPromise=null;throw error;});
   return publicStudentLearningPromise;
 }
-async function publicPerson(id) {
-  if (!/^(teacher-\d{3}|staff-\d{4})$/.test(id)) throw new Error('未找到该人员。');
-  if (!publicProfiles.has(id)) publicProfiles.set(id, fetch(`data/people/${id}.json?v=${encodeURIComponent(publicVersion)}`).then(r => {if (!r.ok) throw new Error('未找到该档案。'); return r.json();}));
-  return publicCopy(await publicProfiles.get(id));
+async function publicPersonSource(id){
+ if(!/^(teacher-\d{3}|staff-\d{4})$/.test(id))throw Error('未找到该人员。');
+ if(!publicProfiles.has(id))publicProfiles.set(id,publicJSON(`data/people/${id}.json?v=${encodeURIComponent(publicVersion)}`).catch(e=>{publicProfiles.delete(id);throw e;}));
+ if(publicProfiles.size>24)publicProfiles.delete(publicProfiles.keys().next().value);return publicProfiles.get(id);
 }
+async function publicPerson(id){return publicCopy(await publicPersonSource(id));}
 function publicRows(data, q) {
   const basis=q.get('education_basis')||'highest';
   if (!['highest','undergraduate'].includes(basis)) throw new Error('学历口径无效。');
@@ -38,24 +45,31 @@ function publicRows(data, q) {
 request = async function(path, options={}) {
   if ((options.method||'GET').toUpperCase()!=='GET') throw new Error('公开演示仅供浏览，新增与修改请使用本地完整版。');
   const data=await publicData, url=new URL(path,'https://public.invalid'), route=url.pathname,q=url.searchParams;
+  if(route==='/organization/personnel')await publicDataSections(['people']);
+  if(route.startsWith('/organization/talent-structure')){
+    let referenceDefault=true;try{const ref=q.has('reference')?JSON.parse(q.get('reference')):{};const defaults={mentor_min:1,backup_min:1,mentor_capacity:3,new_teacher_years:3};referenceDefault=ref&&typeof ref==='object'&&!Array.isArray(ref)&&Object.entries({...ref,...Object.fromEntries([...q].filter(([k])=>k in defaults))}).every(([k,v])=>k in defaults&&Number(v)===defaults[k]);}catch{referenceDefault=false;}
+    const key=[q.get('campus')||'',q.get('department')||'',q.get('population')||'teaching',q.get('education_basis')||'highest'].join('|');
+    if(route==='/organization/talent-structure'&&referenceDefault&&data.__slices?.talent_defaults?.[key])return publicCopy(await publicJSON(data.__slices.talent_defaults[key]));
+    await publicDataSections(['talent_structure_source']);
+  }
   if(route.startsWith('/classroom-review/')){
     const parts=route.split('/'),kind=parts[2],id=decodeURIComponent(parts[3]||'');
     if(parts.length!==4||!['teachers','lessons','students'].includes(kind))throw new Error('课堂学生入口不存在。');
     const teacherId=kind==='teachers'?id:q.get('teacher_id');
     if(!teacherId)throw new Error('请从对应教师的课堂进入。');
-    const profile=await publicPerson(teacherId);
+    const profile=await publicPersonSource(teacherId);
     if(!profile.person?.teaching)throw new Error('当前人员没有任教课堂。');
     const config=await publicStudentLearning();
     if(!window.HouwaiLegacyLearningModel)throw new Error('课堂学生模块暂未准备好。');
-    const model=window.HouwaiLegacyLearningModel.create({person:profile.person,lessons:profile.workspace.lessons,name_pool:config.catalog().students.map(s=>s.name)});
+    if(!publicLegacyModels.has(teacherId)){publicLegacyModels.set(teacherId,window.HouwaiLegacyLearningModel.create({person:profile.person,lessons:profile.workspace.lessons,name_pool:config.catalog().students.map(s=>s.name)}));publicPerf.legacyModelsBuilt++;if(publicLegacyModels.size>12)publicLegacyModels.delete(publicLegacyModels.keys().next().value);}const model=publicLegacyModels.get(teacherId);
     return publicCopy(kind==='teachers'?model.catalog():kind==='lessons'?model.lesson(id,q.get('stage')||'first'):model.student(id));
   }
   if(route.startsWith('/student-learning/')||route.startsWith('/students/')){
     const engine=await publicStudentLearning();
     return publicCopy(engine.resolve(route,Object.fromEntries(q)));
   }
-  if(route==='/committee-materials/catalog')return publicCopy(window.HouwaiCommitteeMaterialsModel.catalog(await publicCommitteeSource,Object.fromEntries(q)));
-  if(route==='/committee-projects/catalog'||route==='/committee-materials/projects')return publicCopy(window.HouwaiCommitteeMaterialsModel.projects(await publicCommitteeSource,Object.fromEntries(q)));
+  if(route==='/committee-materials/catalog')return publicCopy(window.HouwaiCommitteeMaterialsModel.catalog(await publicCommitteeSource(),Object.fromEntries(q)));
+  if(route==='/committee-projects/catalog'||route==='/committee-materials/projects')return publicCopy(window.HouwaiCommitteeMaterialsModel.projects(await publicCommitteeSource(),Object.fromEntries(q)));
   if (route==='/management-diagnostics') {
     if(!window.HouwaiDiagnostics||!data.management_diagnostics_source)throw new Error('学科进展与培养重点暂未读取。');
     return publicCopy(window.HouwaiDiagnostics.analyze(data.management_diagnostics_source,Object.fromEntries(q)));
@@ -81,8 +95,11 @@ request = async function(path, options={}) {
   }
   if (route.startsWith('/platform/')) {
     const method={'/platform/overview':'overview','/platform/teaching':'teaching','/platform/research':'research','/platform/salary':'salary','/platform/data-center':'data_center'}[route];
-    if(!method||!window.HouwaiPlatform||!data.platform_source)throw new Error('当前管理专题尚未读取，请刷新重试。');
-    return publicCopy(window.HouwaiPlatform[method](data.platform_source,Object.fromEntries(q)));
+    if(!method||!window.HouwaiPlatform)throw new Error('当前管理专题尚未读取，请刷新重试。');
+    const scopeKey=[q.get('campus')||'',q.get('department')||'',q.get('period')||'2026-fall'].join('|');
+    if(method==='overview'&&![...q].some(([k,v])=>v&&!['campus','department','period'].includes(k))&&data.__slices?.platform_overviews?.[scopeKey])return publicCopy(await publicJSON(data.__slices.platform_overviews[scopeKey]));
+    const section=method==='teaching'||method==='overview'?'platform_source':'platform_light';await publicDataSections([section]);
+    return publicCopy(window.HouwaiPlatform[method](data[section],Object.fromEntries(q)));
   }
   if (route==='/organization/talent-structure'||route==='/organization/talent-structure/personnel') {
     if(!window.HouwaiTalent||!data.talent_structure_source)throw new Error('当前队伍结构资料尚未读取。');
@@ -92,8 +109,11 @@ request = async function(path, options={}) {
     const campus=q.get('campus')||'',department=q.get('department')||'',period=q.get('period')||'2026-fall';
     const view=q.get('view')||'all';
     if(!['all','overview','appraisal','development','teams','roster'].includes(view))throw new Error('管理专题无效。');
-    const key=[campus,department,period].join('|'),summary=data.management_v8_scopes?.[key],full=data.management_v8;
-    if(!summary||!full)throw new Error('当前组织或学期未收录管理概况，请重新选择。');
+    const key=[campus,department,period].join('|'),summary=data.management_v8_scopes?.[key];
+    if(!summary)throw new Error('当前组织或学期未收录管理概况，请重新选择。');
+    if(view==='overview')return publicCopy({...summary,view,teachers:[],teams:[],positions:[]});
+    if(data.__slices?.management?.[key])return publicCopy({...await publicJSON(data.__slices.management[key]),view});
+    const full=data.management_v8;if(!full)throw new Error('当前组织管理资料暂未读取。');
     const inScope=row=>(!campus||row.campus===campus)&&(!department||(row.department||'待分学部')===department);
     return publicCopy({...summary,view,teachers:full.teachers.filter(inScope),teams:full.teams.filter(inScope),positions:full.positions.filter(inScope)});
   }
@@ -121,6 +141,7 @@ request = async function(path, options={}) {
   }
   if (route==='/human-reviews/dashboard') {
     const key=[q.get('campus')||'',q.get('department')||'',q.get('period_type')||'month',q.get('period')||'2026-10'].join('|');
+    if(data.__slices?.human_dashboards?.[key])return publicCopy(await publicJSON(data.__slices.human_dashboards[key]));
     if(!data.human_dashboards?.[key]) throw new Error('当前范围或周期未收录人工评价演示，请选择已展示的校区与学部。');
     return publicCopy(data.human_dashboards[key]);
   }
@@ -142,6 +163,15 @@ request = async function(path, options={}) {
   }
   if (route==='/classroom-lab') return publicCopy(data.lab);
   throw new Error('此功能未收录在公开浏览版，请使用本地完整版。');
+};
+const publicReadRequest=request;
+request=function(path,options={}){
+ if((options.method||'GET').toUpperCase()!=='GET')return publicReadRequest(path,options);
+ const u=new URL(path,'https://public.invalid');u.searchParams.sort();const key=state.actor+'|'+publicVersion+'|'+u.pathname+'?'+u.searchParams;
+ if(publicResponseCache.has(key)){publicPerf.requestCacheHits++;return publicResponseCache.get(key).then(publicCopy);}
+ const promise=publicReadRequest(path,options).catch(e=>{publicResponseCache.delete(key);throw e;});
+ publicResponseCache.set(key,promise);if(publicResponseCache.size>96)publicResponseCache.delete(publicResponseCache.keys().next().value);
+ return promise.then(publicCopy);
 };
 const publicOriginalLayout=layout;
 layout=function(content) {

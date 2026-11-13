@@ -7,6 +7,7 @@
   const n=v=>Number.isFinite(Number(v))?Number(v):0,pct=(a,b)=>n(b)>0?(n(a)/n(b)*100).toFixed(1)+'%':'—';
   const rate=v=>v==null?'—':n(v).toFixed(Number.isInteger(n(v))?0:1)+'%',money=v=>'¥'+Math.round(n(v)).toLocaleString('zh-CN');
   const period='2026-fall',periodLabel='2026年秋季学期';
+  const researchHistoryOpen=new Set();
   let briefTrack='ai',briefReturnHash='#group';
   let route={campus:'',department:''},routeError='',tree=null,treeLoading=false,modal=null,focusBefore=null,backTicket=null,pendingTalentTab='',pendingResearchTab='',restoreProject='';
   const actorKey=()=>state.actor||'',scope=()=>pages.has(state.page)?route:{campus:org.campus||'',department:org.department||''};
@@ -56,11 +57,11 @@
   function projectCards(d){return `<div class="pn-project-summary">${[['正在推进的项目',d.summary?.projects],['作品（去重）',d.summary?.artifacts],['课堂应用',d.summary?.applications],['应用班级',d.summary?.classes]].map(([a,b])=>`<span>${a}<b>${n(b)}</b></span>`).join('')}</div><div class="pn-projects">${arr(d.projects).map(p=>`<article class="pn-project"><header><span class="pn-chip ${String(p.department).includes('初中')?'green':'blue'}">${safe(p.subject)} · ${safe(p.department)}</span><span>${safe(({active:'推进中',trial:'试教中',applied:'已应用',completed:'已完成',planned:'准备中'})[p.status]||p.status)}</span></header><h3>${safe(p.title)}</h3><p>${safe(p.problem)}</p><div class="pn-project-counts"><span><b>${arr(p.artifact_ids).length}</b> 作品</span><span><b>${arr(p.application_ids).length}</b> 课堂应用</span></div><div class="pn-project-owner">${safe(p.campus)} · ${safe(p.owner_name)}<time>${safe(p.due_date)}</time></div><footer><span>${safe(p.next_action)}</span><button class="pn-link" data-pn-project="${safe(p.id)}">看进展 ↗</button></footer></article>`).join('')||'<p class="pn-empty">本范围暂无匹配项目，试试其他学科。</p>'}</div><section class="pn-programs"><div class="pn-section-head"><div><h2>进入学科教研程序</h2><p>具体作品、备课与课堂活动在原有程序继续开展。</p></div></div><div>${arr(d.programs).map(p=>`<article><b>${safe(p.label)}</b><span>${p.password_protected?'保留原访问权限':p.url?'演示入口':'入口待配置'}</span>${p.url?`<a href="${safe(safeURL(p.url))}" target="_blank" rel="noopener noreferrer">进入程序 ↗</a>`:'<span class="pn-program-pending">后续接入</span>'}</article>`).join('')}</div></section>`;}
   function researchHTML(){
     if(state.data.actor?.role==='teacher')return `<div class="pn-page" id="platformResearch">${head('我的教研作品','把自己的工具、知识网与课例分享给同事，保留版本和审核记录。')}${window.HouwaiResearchLibrary?window.HouwaiResearchLibrary.html(scope()):'<p class="pn-empty">正在准备作品库…</p>'}</div>`;
-    const p=pref(),base=p.tab==='projects'?null:load('teaching',query()),teaching=p.tab==='projects'?null:load('teaching',learningQuery()),research=p.tab==='projects'?load('research',query()):null,tabs=[['projects','教研推进'],['teaching','教学运行'],['ability','学业与能力'],['forecast','目标研判']];
+    const p=pref(),base=p.tab==='projects'?null:load('teaching',query()),teaching=p.tab==='projects'?null:load('teaching',learningQuery()),research=p.tab==='projects'&&researchHistoryOpen.has(actorKey()+'|'+JSON.stringify(scope()))?load('research',query()):null,tabs=[['projects','教研推进'],['teaching','教学运行'],['ability','学业与能力'],['forecast','目标研判']];
     let content;
     if(p.tab==='projects'){
       content=window.HouwaiResearchLibrary?window.HouwaiResearchLibrary.html(scope()):'<p class="pn-empty">正在准备教研推进与作品库…</p>';
-      if(window.HouwaiResearchLibrary?.line!=='special')content+=`<details class="rl-history-applications" data-v8-detail="research-applications"><summary>课堂创新示例：作品应用与学生变化</summary>${research?.data?projectCards(research.data):statusBox(research)}</details>`;
+      if(window.HouwaiResearchLibrary?.line!=='special')content+=`<details class="rl-history-applications" data-v8-detail="research-applications" ${researchHistoryOpen.has(actorKey()+'|'+JSON.stringify(scope()))?'open':''}><summary>课堂创新示例：作品应用与学生变化</summary>${research?.data?projectCards(research.data):research?statusBox(research):'<p class="pn-empty">展开后查看作品应用与学生变化。</p>'}</details>`;
     }else content=teaching?.data?(p.tab==='ability'?abilityView(teaching.data):p.tab==='forecast'?scenarioView(teaching.data):teachingView(teaching.data)):statusBox(teaching);
     return `<div class="pn-page" id="platformResearch">${head('大教研','专项教研与学科课堂创新并行，看团队推进，也看学生怎样学习。')}${scopeFilters()}<nav class="pn-tabs" aria-label="大教研专题">${tabs.map(([key,text])=>`<button data-pn-tab="${key}" class="${p.tab===key?'active':''}" aria-selected="${p.tab===key}">${text}</button>`).join('')}</nav>${base?.data?teachingFilters(base.data.rows):''}${content}</div>`;
   }
@@ -146,6 +147,7 @@
     const campus=e.target.closest('[data-v8-campus]');if(campus&&state.page==='talent'){e.preventDefault();e.stopImmediatePropagation();navigate('talent',campus.dataset.v8Campus||'',campus.dataset.v8Department||'');return;}
     if(backTicket&&e.target.closest('[data-nav],.brand'))backTicket=null;
   },true);
+  document.addEventListener('toggle',e=>{const d=e.target;if(!d.matches?.('.rl-history-applications')||!d.isConnected)return;const key=actorKey()+'|'+JSON.stringify(scope());if(d.open){if(researchHistoryOpen.has(key))return;researchHistoryOpen.add(key);render();}else researchHistoryOpen.delete(key);},true);
   window.addEventListener('hashchange',()=>{closeModal();});
   window.HouwaiPlatformNext={html:()=>state.page==='research'?researchHTML():state.page==='talent'?talentHTML():dataHTML(),decorate,query,navigate};
   readRoute();if(state.data)render();

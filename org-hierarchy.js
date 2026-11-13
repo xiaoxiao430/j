@@ -3,6 +3,7 @@
 (() => {
   let data = null, routeError = '', reading = false;
   const detailsOpen=new Set();
+  let optionalPending=false;function ensureFlowData(){if(data?.people&&data?.management||optionalPending)return;optionalPending=true;(window.publicDataSections?publicDataSections(['people','management']):publicData).then(v=>{data=v;if(state.data)render();}).catch(()=>{}).finally(()=>{optionalPending=false;});}
   const detailKey=()=>[pageName(),org.campus,org.department].join('|');
   const native = {readRoute,go,orgEnsure,orgDashboard,overview,group,profile,orgRoster,render,orgReportTeachers,orgReports,loadReport};
   const encode = encodeURIComponent;
@@ -69,7 +70,7 @@
     return `<nav class="flow-breadcrumb" aria-label="组织层级">${button('集团','','')}<span aria-hidden="true">›</span>${c?button(c,c):'<span>选择校区</span>'}${c?'<span aria-hidden="true">›</span>':''}${d?button(d,c,d):c?'<span>选择学部</span>':''}${person?`<span aria-hidden="true">›</span><strong aria-current="page">${esc(person.name)}</strong>`:d?'<span class="flow-level">教师名册</span>':''}</nav>`;
   }
   const pct=(a,b)=>b>0?(a/b*100).toFixed(1)+'%':'待核';
-  const rows=s=>(data?.management||[]).filter(x=>(!s.campus||x.campus===s.campus)&&(!s.department||(x.department||'待分学部')===s.department));
+  const rows=s=>(ensureFlowData(),data?.management||[]).filter(x=>(!s.campus||x.campus===s.campus)&&(!s.department||(x.department||'待分学部')===s.department));
   const model=s=>window.HouwaiInsights?.build(data?.management||[],data?.management_cases||[],s);
   function facts(s) {
     const list=rows(s),sum=k=>list.reduce((n,r)=>n+(Number(r.mastery?.[k])||0),0);
@@ -102,6 +103,7 @@
     priorities.setAttribute('aria-label','组织优先行动');
   }
   orgReportTeachers=function(){
+    ensureFlowData();
     const source=data?.people||native.orgReportTeachers();
     return source.filter(t=>t.teaching!==false&&(!org.campus||t.campus===org.campus)&&(!org.department||(t.department||'待分学部')===org.department));
   };

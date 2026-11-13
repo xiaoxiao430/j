@@ -34,10 +34,8 @@
       try{v.result=window.HouwaiTalent.analyze(source,query);v.error='';}catch(e){v.result=null;v.error=e.message||'当前范围暂时无法分析。';}
       return;
     }
-    if(typeof publicData!=='undefined'&&!sourceReady)return;
-    if(typeof publicData!=='undefined'&&(sourceError||!source)){v.error=sourceError||'队伍分析资料尚未收录。';return;}
     requests.add(pendingKey);v.error='';
-    request('/organization/talent-structure?'+new URLSearchParams({campus:v.campus,department:v.department,population:v.population,education_basis:v.education_basis,...v.reference})).then(result=>{if(v.actor===who()&&serial===v.serial){v.result=result;v.error='';}}).catch(e=>{if(v.actor===who()&&serial===v.serial){v.result=null;v.error=e.message;}}).finally(()=>{requests.delete(pendingKey);if(v.actor===who()&&serial===v.serial)render();});
+    request('/organization/talent-structure?'+new URLSearchParams({campus:v.campus,department:v.department,population:v.population,education_basis:v.education_basis,reference:JSON.stringify(v.reference)})).then(result=>{if(v.actor===who()&&serial===v.serial){v.result=result;v.error='';}}).catch(e=>{if(v.actor===who()&&serial===v.serial){v.result=null;v.error=e.message;}}).finally(()=>{requests.delete(pendingKey);if(v.actor===who()&&serial===v.serial)render();});
   }
   function treeCampuses(v){return arr(treeFor(v)?.campuses);}
   function departments(v){return arr(treeCampuses(v).find(c=>c.name===v.campus)?.departments).map(d=>typeof d==='string'?d:d.name);}
@@ -89,7 +87,7 @@
     return `<section id="talentStructurePanel" class="tal-panel" data-tal-key="${safe(v.key)}" data-tal-loaded="${!!v.result}" data-tal-campus="${safe(v.campus)}" data-tal-department="${safe(v.department)}" data-tal-population="${safe(v.population)}" data-tal-education-basis="${safe(v.education_basis)}">${v.result?body(v,v.result):`${filters(v)}<div class="tal-loading" role="status"><h3>人才结构与学科培养重点</h3><p>${safe(v.error||'正在整理当前范围的结构与培养资料…')}</p>${v.error?'<button type="button" data-tal-retry>重新读取</button>':''}</div>`}</section>`;
   }
   const current=target=>{const panel=target.closest('#talentStructurePanel');return panel?views.get(panel.dataset.talKey):null;};
-  const refresh=v=>{v.result=null;v.error='';run(v);render();};
+  const refresh=v=>{if(!source){sourceReady=false;sourceError='';}v.result=null;v.error='';run(v);render();};
   function listTitle(d){if(d.overview)return '行政与保障人员';if(d.facet==='new_development')return '新培养教师 · 本学期新纳入';if(d.facet==='service_group')return '行政与保障人员 · '+d.label;const basis=d.query.education_basis==='first'?'第一学历':'最终学历',degree=['education','university','school','bachelor_plus','university_985','university_211'].includes(d.facet);return (degree?basis:(chartLabels[d.facet]||'人员分类'))+' · '+d.label;}
   function listDepartments(d){const v=views.get(d.viewKey);return arr(treeFor(v)?.campuses).find(c=>c.name===d.query.campus)?.departments||[];}
   function listFilters(d){const v=views.get(d.viewKey),campuses=treeCampuses(v),deps=listDepartments(d).map(x=>typeof x==='string'?x:x.name);if(d.facet==='service_group')return `<div class="tal-list-filters tal-service-filters"><label><span>校区</span><select id="talentListCampus" aria-label="分类名单校区"><option value="">授权范围汇总</option>${campuses.map(c=>`<option value="${safe(c.name)}" ${d.query.campus===c.name?'selected':''}>${safe(c.name)}</option>`).join('')}</select></label><p>按实际服务岗位查看，不归入任教学部。</p><button type="button" data-tal-list-all>查看本类全部人员</button></div>`;return `<div class="tal-list-filters"><label><span>校区</span><select id="talentListCampus" aria-label="分类名单校区"><option value="">授权范围汇总</option>${campuses.map(c=>`<option value="${safe(c.name)}" ${d.query.campus===c.name?'selected':''}>${safe(c.name)}</option>`).join('')}</select></label><label><span>学部</span><select id="talentListDepartment" aria-label="分类名单学部" ${d.query.campus?'':'disabled'}><option value="">全部可查看学部</option>${deps.map(name=>`<option value="${safe(name)}" ${d.query.department===name?'selected':''}>${safe(name)}</option>`).join('')}</select></label><button type="button" data-tal-list-all>查看本类全部人员</button></div>`;}
@@ -156,6 +154,6 @@
     refresh(v);
   },true);
   window.HouwaiTalentView={html,afterRender,openScopePeople(scope,facet,value,label,population='teaching'){const v=getView(scope);ensureTree(v);openPeople({...v,...scopeOf(scope)},facet,value,label,population,true);},openServices(scope){const v=getView(scope);ensureTree(v);drawer={viewKey:v.key,external:true,overview:true,facet:'service_group',label:'行政与保障人员',query:{...scope,population:'all',education_basis:'highest'},result:null,error:''};fetchPeople();},get current(){return views.get(activeKey);},views};
-  if(typeof publicData!=='undefined')Promise.resolve(publicData).then(data=>{source=data.talent_structure_source||null;sourceReady=true;if(!source)sourceError='当前演示未收录队伍结构资料。';for(const v of views.values()){v.result=null;v.error='';run(v);}if(state.data)render();}).catch(e=>{sourceReady=true;sourceError=e.message;if(state.data)render();});
+
   if(state.data)render();
 })();

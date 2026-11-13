@@ -1,6 +1,8 @@
 'use strict';
 /* Read-only synthetic rule suggestions; load after leadership-demo.js and insight-model.js. */
 (() => {
+  let sourcePending=false;
+  function ensureRecords(){if(records||sourcePending)return;sourcePending=true;(window.publicDataSections?publicDataSections(['management']):publicData).then(data=>{records=data.management||[];cases=data.management_cases||[];if(state.data)render();}).catch(()=>{}).finally(()=>{sourcePending=false;});}
   let records = null, cases = [], view = {key:'',q:'',page:1}, detailFocus = null;
   const size = 12;
   const scopeLabel = () => [org.campus,org.department].filter(Boolean).join(' · ') || '集团全部校区';
@@ -12,6 +14,7 @@
   const personLink = (x,tab=x.profile_tab || 'growth',label='查看档案 ↗') => `<button class="text-link" data-ins-person="${safe(x.teacher_id)}" data-ins-tab="${safe(tab)}">${safe(label)}</button>`;
   const proofButton = x => `<button class="text-link" data-ins-proof="${safe(itemKey(x))}">${x.case_id ? '核查责任事实' : '查看依据与行动'} ↗</button>`;
   function panel() {
+    ensureRecords();
     if (!records || !org.summary || state.data.actor.role === 'mentor') return '';
     const model = build();
     return `<section class="ins-panel panel" id="managementInsights" aria-label="AI管理提示"><header class="ins-heading"><div><span class="ins-mark" aria-hidden="true">✦</span><h2>AI管理提示</h2></div><span class="ins-badge">演示规则演示 · 待校方确认</span></header><p class="ins-summary">${safe(model.summary)}</p><div class="ins-context">${safe(scopeLabel())} · 截至 ${safe(model.as_of)} · 人工确认后执行</div><div class="ins-categories">${model.groups.map(g => `<button data-ins-category="${safe(g.key)}" aria-label="${safe(g.label)}，${g.count}人，查看全部名单"><span>${safe(g.label)}</span><strong>${g.count}<small>人</small></strong><span class="ins-category-link">查看名单 ↗</span></button>`).join('')}</div><ol class="ins-priorities" aria-label="优先行动">${model.priorities.slice(0,3).map((x,i) => `<li data-ins-priority="${safe(itemKey(x))}"><span class="ins-order">${i+1}</span><div><div class="ins-priority-title"><strong>${safe(x.name)}</strong><span>${safe(x.department)} · ${safe(x.subject)}</span></div><p class="ins-action">${safe(x.action)}</p><p class="ins-reason">依据：${safe(x.reason)}</p><div class="ins-priority-foot"><span>责任人 ${safe(x.owner_name)} · 期限 ${safe(x.due_date)}</span>${proofButton(x)}</div></div></li>`).join('') || '<li>当前范围暂无需提示事项。</li>'}</ol><p class="ins-footnote">按当前范围去重计人；同一教师可出现在多类，人数不可相加。纪律／责任事实与教学改进分开核验；低教学结果或记录缺失不自动形成处分。</p></section>`;
@@ -70,6 +73,5 @@
   });
   document.addEventListener('submit',e=>{if(e.target.id!=='insSearch')return;e.preventDefault();view.q=document.querySelector('#insQuery').value.trim();view.page=1;updateList();});
   document.addEventListener('keydown',e=>{const host=document.querySelector('#insDetailHost');if(!host)return;if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();closeDetail();}else if(e.key==='Tab'){const nodes=[...host.querySelectorAll('button,a[href],input,[tabindex="0"]')],first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}},true);
-  const source=typeof publicDataPromise!=='undefined'?publicDataPromise:publicData;
-  source.then(data=>{records=Array.isArray(data.management)?data.management:[];cases=Array.isArray(data.management_cases)?data.management_cases:[];if(state.data)render();}).catch(()=>{});
+
 })();

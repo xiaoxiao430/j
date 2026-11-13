@@ -8,8 +8,8 @@
   const actor=()=>state.data?.actor||{},restricted=()=>['mentor','information_officer','independent_reviewer','teaching_leader','grade_leader','teacher'].includes(actor().role);
   const scopeKey=()=>[state.actor,org.campus||'',org.department||''].join('|');
   const getSettings=()=>{const key=scopeKey();if(!settings.has(key))settings.set(key,{view:'roster',q:org.q||'',category:org.category||'',page:org.page||1,team:'',type:''});return settings.get(key);};
-  let returnState=null,restoreScroll=null,profileId='',resizeTimer,referencePeople=null,detailContext='';
-  const path=()=>'/organization/management?'+new URLSearchParams({campus:org.campus||'',department:org.department||'',period:'2026-fall'});
+  let returnState=null,restoreScroll=null,profileId='',resizeTimer,referencePeople=null,referencePeopleActor='',referencePeopleError='',detailContext='';
+  const path=()=>'/organization/management?'+new URLSearchParams({campus:org.campus||'',department:org.department||'',period:'2026-fall',view:org.department?'all':'overview'});
   const personalPath=id=>'/management/'+encodeURIComponent(id);
   function load(key,url){
     if(cache.has(key)||pending.has(key)||errors.has(key))return;
@@ -59,6 +59,12 @@
   }
   function facetSet(){
     if(!org.facet)return null;
+    if(referencePeopleActor!==state.actor){referencePeople=null;referencePeopleError='';referencePeopleActor=state.actor;}
+    if(!referencePeople&&typeof window.publicDataSections==='function'){
+      const key=state.actor+'|reference-people';
+      if(!pending.has(key)&&!referencePeopleError){pending.add(key);const who=state.actor;window.publicDataSections(['people']).then(d=>{if(who===state.actor){if(!Array.isArray(d.people))throw Error('人员名单暂未读取。');referencePeople=d.people;}}).catch(e=>{if(who===state.actor)referencePeopleError=e.message;}).finally(()=>{pending.delete(key);if(who===state.actor)render();});}
+      return undefined;
+    }
     if(referencePeople){const f=org.facet==='subject'&&org.value==='true'?'teaching':org.facet;return new Set(referencePeople.filter(t=>{const d=t[org.basis==='undergraduate'?'undergraduate':'highest']||{};if(f==='teaching')return t.teaching!==false;if(f==='bachelor_plus')return ['本科','硕士','博士'].includes(d.education);if(f==='university_985')return d.tier==='985';if(f==='university_211')return ['985','211非985'].includes(d.tier);return list(t.facets?.[org.basis||'highest']?.[f]).includes(org.value);}).map(t=>t.id));}
     const key=scopeKey()+'|facet|'+[org.basis,org.facet,org.value].join('|');
     if(cache.has(key))return cache.get(key);
@@ -67,7 +73,7 @@
       const get=page=>request('/organization/personnel?'+new URLSearchParams({...query,page}));
       get(1).then(async first=>{const rest=await Promise.all(Array.from({length:Math.max(0,(first.pages||1)-1)},(_,i)=>get(i+2)));if(who===state.actor)cache.set(key,new Set([first,...rest].flatMap(x=>list(x.items)).map(x=>x.id)));}).catch(e=>{if(who===state.actor)errors.set(key,e.message);}).finally(()=>{pending.delete(key);if(who===state.actor)render();});
     }
-    return new Set();
+    return undefined;
   }
   function filtered(d,s){const ids=facetSet();let rows=list(d.teachers).filter(t=>t.teaching!==false&&(!ids||ids.has(t.id))&&(!s.q||[t.name,t.subject,t.position,t.career?.target_role].some(v=>String(v||'').includes(s.q)))&&(!s.category||t.category===s.category));if(s.team){const team=list(d.teams).find(x=>x.id===s.team);rows=rows.filter(t=>list(team?.member_ids).includes(t.id));}return rows;}
   function controls(s){return `<div class="v8-controls"><form id="v8Search"><label class="sr-only" for="v8Query">搜索教师姓名、学科或岗位</label><input id="v8Query" value="${safe(s.q)}" placeholder="姓名、学科或岗位"><button class="v8-search-button" type="submit" aria-label="搜索教师"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.3 15.3 5 5"></path></svg></button></form><label><span class="sr-only">教师正式评价</span><select id="v8Category" aria-label="按正式评价筛选"><option value="">全部评价</option>${Object.entries({excellent:'优秀',good:'良好',support:'重点支持',pending:'资料待补齐',not_applicable:'非任教岗位'}).map(([k,v])=>`<option value="${k}" ${s.category===k?'selected':''}>${v}</option>`).join('')}</select></label></div>`;}
@@ -79,6 +85,7 @@
     return `<div class="v8-team-types" role="group" aria-label="团队类型">${['','教研组','备课组','年级组'].map(v=>`<button data-v8-type="${v}" class="${s.type===v?'active':''}">${v||'全部团队'}</button>`).join('')}</div><div class="v8-desktop-table table-scroll"><table id="v8TeamTable"><thead><tr>${['团队 / 类型','负责人','成员','岗位后备','能力缺口','周课量分布','安排建议'].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(t=>`<tr><td><b>${safe(t.name)}</b><small>${safe(t.type)}</small></td><td>${safe(t.leader_name)}</td><td>${members(t)}</td><td>${backup(t)}</td><td>${safe(t.gap||'保持团队互补')}</td><td>${safe(t.workload?.min??'—')}—${safe(t.workload?.max??'—')} 节<small>带教 ${safe(t.mentee_count??0)} 人</small></td><td class="v8-cell-reading">${safe(t.recommendation)}</td></tr>`).join('')}</tbody></table></div><div class="v8-mobile-cards v8-team-cards">${rows.map(t=>`<article class="v8-team-card"><header><span class="v8-track">${safe(t.type)}</span><h3>${safe(t.name)}</h3></header><dl><div><dt>负责人</dt><dd>${safe(t.leader_name)}</dd></div><div><dt>岗位后备</dt><dd>${backup(t)}</dd></div><div><dt>当前重点</dt><dd>${safe(t.gap||'保持团队互补')}</dd></div><div><dt>任务负担</dt><dd>周课量 ${safe(t.workload?.min??'—')}—${safe(t.workload?.max??'—')}节 · 带教 ${safe(t.mentee_count??0)}人</dd></div></dl><p>${safe(t.recommendation)}</p>${members(t)}</article>`).join('')||'<p class="v8-empty">本范围暂无该类团队。</p>'}</div><p class="v8-note">成员可同时属于教研组、备课组和年级组，各组人数不相加为教师总人数。</p>`;
   }
   function rosterView(d,s){
+    if(org.facet&&facetSet()===undefined){const failure=referencePeopleError||errors.get(scopeKey()+'|facet|'+[org.basis,org.facet,org.value].join('|'));return `<section class="v8-loading" role="status"><p>${safe(failure||'正在读取筛选后的教师名单…')}</p>${failure?'<button data-v8-retry-facet>重新读取名单</button>':''}</section>`;}
     const all=filtered(d,s),pages=Math.max(1,Math.ceil(all.length/20));s.page=Math.min(Math.max(1,s.page),pages);org.q=s.q;org.category=s.category;org.page=s.page;
     const rows=all.slice((s.page-1)*20,s.page*20),team=list(d.teams).find(t=>t.id===s.team);
     return `${controls(s)}${org.facet?`<div class="v8-filter-chip">${safe(orgChartNames[org.facet]||org.facet)}：${safe(org.value||'全部')}<button data-v8-clear-facet aria-label="取消人员结构筛选">×</button></div>`:''}${team?`<div class="v8-filter-chip">${safe(team.name)} · ${all.length}人<button data-v8-clear-team aria-label="取消团队筛选">×</button></div>`:''}<div class="v8-result-count">${all.length} 人<span>${safe(views.find(v=>v[0]===s.view)?.[1])} · ${safe(period(d.period))}</span></div>${desktopTable(rows,s.view)}<div class="v8-mobile-cards">${rows.map(t=>card(t,s.view)).join('')||'<p class="v8-empty">没有符合条件的人员。</p>'}</div><div class="v8-pagination"><span>第 ${s.page} / ${pages} 页</span><button data-v8-page="${s.page-1}" ${s.page<=1?'disabled':''}>上一页</button><button data-v8-page="${s.page+1}" ${s.page>=pages?'disabled':''}>下一页</button></div>`;
@@ -104,7 +111,8 @@
     const key=scopeKey(),d=payload();if(!d){load(key,path());return `<section id="v8Management" class="v8-loading" data-v8-loaded="false" role="status"><h2>${safe(org.department||org.campus||'集团总体分析')}</h2><p>${safe(errors.get(key)||'正在整理教师、培养与团队情况…')}</p>${errors.has(key)?'<button data-v8-retry>重新读取</button>':''}</section>`;}
     const s=getSettings(),isDepartment=!!org.department;
     const talent=()=>window.HouwaiTalentView?window.HouwaiTalentView.html({campus:org.campus||'',department:org.department||''}):'<section class="tal-panel" role="status">正在准备队伍结构分析…</section>';
-    return `<div id="v8Management" data-v8-loaded="true" data-v8-scope="${safe(key)}">${summary(d,isDepartment)}${isDepartment?`<section id="v8Department">${tabs(s)}${s.view==='structure'?talent():s.view==='teams'?controls(s)+teamView(d,s):rosterView(d,s)}</section>`:(window.HouwaiDiagnosticsView?.html({campus:org.campus||'',department:''})||'')+comparisons(d)+`<details class="v8-details v8-hr-analysis" data-v8-detail="hr-analysis"><summary>人才结构 · 年龄、学历、专业与院校</summary>${talent()}</details>`}</div>`;
+    const hrOpen=!!openDetails.get(state.actor+'|'+location.hash+'|hr-analysis');
+    return `<div id="v8Management" data-v8-loaded="true" data-v8-scope="${safe(key)}">${summary(d,isDepartment)}${isDepartment?`<section id="v8Department">${tabs(s)}${s.view==='structure'?talent():s.view==='teams'?controls(s)+teamView(d,s):rosterView(d,s)}</section>`:(window.HouwaiDiagnosticsView?.html({campus:org.campus||'',department:''})||'')+comparisons(d)+`<details class="v8-details v8-hr-analysis" data-v8-detail="hr-analysis" data-v8-hr-ready="${hrOpen}" ${hrOpen?'open':''}><summary>人才结构 · 年龄、学历、专业与院校</summary>${hrOpen?talent():''}</details>`}</div>`;
   };
   function personal(t){
     const c=t.career||{},comparables=list(t.trend).filter(x=>x.comparable===true),trend=comparables.length>=2?`<div class="v8-mini-trend"><span>同口径变化</span>${comparables.map(x=>`<span>${safe(x.label)} <b>${safe(x.rate)}%</b></span>`).join('<i>→</i>')}</div>`:'';
@@ -150,7 +158,7 @@
   function openTeacher(id){const s=getSettings();returnState={hash:location.hash,settings:{...s},scope:scopeKey(),q:org.q,category:org.category,page:org.page,facet:org.facet,value:org.value,y:window.scrollY};state.profileTab='growth';org.report=false;go('profile',id);window.scrollTo({top:0,behavior:'instant'});}
   document.addEventListener('click',e=>{
     const special=e.target.closest('[data-v10-cohort],[data-v10-services]');if(special){e.preventDefault();e.stopImmediatePropagation();const scope={campus:special.dataset.v10Campus||'',department:special.dataset.v10Department||''};if(special.hasAttribute('data-v10-cohort'))window.HouwaiTalentView?.openScopePeople(scope,'new_development','true','本学期新纳入培养');else window.HouwaiTalentView?.openServices(scope);return;}
-    const el=e.target.closest('[data-v8-view],[data-v8-page],[data-v8-open],[data-v8-team],[data-v8-type],[data-v8-clear-team],[data-v8-clear-facet],[data-v8-campus],[data-v8-return],[data-v8-retry]');if(!el)return;e.preventDefault();e.stopImmediatePropagation();
+    const el=e.target.closest('[data-v8-view],[data-v8-page],[data-v8-open],[data-v8-team],[data-v8-type],[data-v8-clear-team],[data-v8-clear-facet],[data-v8-campus],[data-v8-return],[data-v8-retry],[data-v8-retry-facet]');if(!el)return;e.preventDefault();e.stopImmediatePropagation();
     const s=getSettings();
     if(el.hasAttribute('data-v8-open')){openTeacher(el.dataset.v8Open);return;}
     if(el.hasAttribute('data-v8-return')){
@@ -158,6 +166,7 @@
       else if(window.HouwaiOrgFlow)window.HouwaiOrgFlow.navigate(org.campus,org.department,'roster');else{org.detailId='';go('profile');}return;
     }
     if(el.hasAttribute('data-v8-campus')){settings.delete(scopeKey());if(window.HouwaiOrgFlow)window.HouwaiOrgFlow.navigate(el.dataset.v8Campus,el.dataset.v8Department||'',state.page==='profile'?'roster':state.page);else{org.campus=el.dataset.v8Campus;org.department=el.dataset.v8Department||'';org.summary=null;orgRoster();render();}window.scrollTo({top:0,behavior:'instant'});return;}
+    if(el.hasAttribute('data-v8-retry-facet')){referencePeopleError='';errors.delete(scopeKey()+'|facet|'+[org.basis,org.facet,org.value].join('|'));rerender();return;}
     if(el.hasAttribute('data-v8-retry')){errors.delete(scopeKey());cache.delete(scopeKey());rerender();return;}
     if(el.hasAttribute('data-v8-view')){s.view=el.dataset.v8View;s.page=1;}
     if(el.hasAttribute('data-v8-page')){s.page=Number(el.dataset.v8Page);}
@@ -169,9 +178,8 @@
   },true);
   document.addEventListener('submit',e=>{if(e.target.id!=='v8Search')return;e.preventDefault();e.stopImmediatePropagation();const s=getSettings();s.q=document.getElementById('v8Query').value.trim();s.page=1;rerender();},true);
   document.addEventListener('change',e=>{if(e.target.id==='v8Category'){e.preventDefault();e.stopImmediatePropagation();const s=getSettings();s.category=e.target.value;s.page=1;rerender();}},true);
-  document.addEventListener('change',e=>{if(e.target.id==='actorSelect'){returnState=null;restoreScroll=null;profileId='';}});
-  if(typeof publicData!=='undefined')Promise.resolve(publicData).then(d=>{referencePeople=list(d.people);});
-  document.addEventListener('toggle',e=>{const el=e.target;if(el.matches?.('details[data-v8-detail]')&&el.isConnected&&detailContext)openDetails.set(detailContext+'|'+el.dataset.v8Detail,el.open);},true);
+  document.addEventListener('change',e=>{if(e.target.id==='actorSelect'){returnState=null;restoreScroll=null;profileId='';referencePeople=null;referencePeopleActor='';referencePeopleError='';}});
+  document.addEventListener('toggle',e=>{const el=e.target;if(!el.matches?.('details[data-v8-detail]')||!el.isConnected||!detailContext)return;openDetails.set(detailContext+'|'+el.dataset.v8Detail,el.open);if(el.dataset.v8Detail==='hr-analysis'&&el.open&&el.dataset.v8HrReady!=='true'){const focused=el.contains(document.activeElement);rerender();if(focused)document.querySelector('details[data-v8-detail="hr-analysis"] summary')?.focus({preventScroll:true});}},true);
   window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(decorate,100);});
   window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#profile/')&&org.detailId!==profileId)window.scrollTo({top:0,behavior:'instant'});});
   window.HouwaiV8={get payload(){return payload();},get profile(){return org.detail?.management_v8;},settings,cache,setView(view){if(views.some(x=>x[0]===view)){getSettings().view=view;getSettings().page=1;render();}}};
